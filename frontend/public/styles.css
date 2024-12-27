@@ -1,4 +1,7 @@
-/* Global Styles */
+@import url("https://fonts.googleapis.com/css?family=Montserrat:400,800");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 * {
   margin: 0;
   padding: 0;
@@ -16,7 +19,6 @@ nav {
   padding: 1rem;
   position: relative;
 }
-
 .container {
   max-width: 95%;
   margin: 0 auto;
@@ -52,6 +54,7 @@ nav {
 
 .contact-btn {
   background-color: #333; /* Dark Gray Button */
+  margin: 5px;
   color: #fff;
   padding: 0.75rem 1.5rem;
   border: none;
@@ -130,6 +133,43 @@ nav {
 .btn-login:hover {
   background-color: #23272b;
 }
+
+.typography-container {
+  margin: 20px;
+}
+
+.heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.heading-text {
+  flex: 1;
+}
+
+.heading-details {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #888;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.action-buttons button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #007bff;
+}
+
 @media screen and (max-width: 700px) {
   /* Your existing styles for max-width: 900px */
   .container {
@@ -153,5 +193,20 @@ nav {
   }
   .contact-btn {
     padding: 0.4rem 0.4rem;
+  }
+}
+
+@keyframes unlock {
+  0% {
+    opacity: 0;
+    transform: rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(-10deg);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(0deg);
   }
 }

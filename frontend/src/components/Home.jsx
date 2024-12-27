@@ -5,7 +5,7 @@ import Main from "./Main";
 function Home() {
   return (
     <div>
-      <Nav />
+      <Nav onSecrets={false} />
       <Main />
     </div>
   );
