@@ -9,31 +9,14 @@ import cors from "cors";
 import fs from "fs";
 import session from "express-session";
 import env from "dotenv";
+import pgSession from "connect-pg-simple";
 
 const app = express();
 const port = 3000;
 const saltRounds = 10;
 env.config();
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24,
-    },
-  })
-);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-const db = new pg.Client({
+const db = new pg.Pool({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
   database: process.env.PG_DATABASE,
@@ -44,10 +27,36 @@ const db = new pg.Client({
   },
 });
 
-db.connect();
+// Create pgSession store
+const PgStore = pgSession(session);
+
+// Session middleware setup (only once)
+app.use(
+  session({
+    store: new PgStore({
+      pool: db,
+      tableName: "session",
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24,
+    },
+  })
+);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.use(
   cors({
-    origin: ["process.env.FRONTEND_URL"],
+    origin: [process.env.FRONTEND_URL], // Note: Remove quotes around process.env.FRONTEND_URL
     methods: ["POST", "GET"],
     credentials: true,
   })
