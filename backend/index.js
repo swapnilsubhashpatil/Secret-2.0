@@ -59,14 +59,13 @@ app.use(passport.session());
 // Update your CORS configuration
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL.split(","), // Allow multiple origins
-    methods: ["POST", "PUT", "GET", "OPTIONS", "HEAD", "DELETE"], // Add all methods you use
+    origin: true, // Allow all origins
+    // or use origin: '*' if you don't need credentials
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
-    exposedHeaders: ["set-cookie"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
-
 // Add this middleware before your routes
 app.use((req, res, next) => {
   console.log("Request Origin:", req.get("origin"));
