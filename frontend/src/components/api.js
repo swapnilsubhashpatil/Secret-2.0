@@ -1,21 +1,27 @@
 import axios from "axios";
 
-// Create axios instance with default config
 const api = axios.create({
   baseURL: "https://secret-2-0.onrender.com",
   withCredentials: true,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Response interceptor
+// Modify the response interceptor
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      window.location.href = "/login";
+  async (error) => {
+    // Only redirect on 401 errors from /check-auth endpoint
+    if (
+      error.response?.status === 401 &&
+      !error.config.url.includes("/login")
+    ) {
+      // Check if we're not already on the login page to prevent loops
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

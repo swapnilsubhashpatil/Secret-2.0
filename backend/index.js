@@ -41,12 +41,12 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true, // Set to true since you're using HTTPS
+      secure: true,
       httpOnly: true,
-      sameSite: "none", // Important for cross-origin requests
-      maxAge: 1000 * 60 * 60 * 24,
+      sameSite: "none",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
-    proxy: true, // Important when running behind a proxy
+    proxy: true,
   })
 );
 
@@ -90,12 +90,20 @@ app.get("/api/logout", (req, res) => {
 
 app.get("/api/check-auth", (req, res) => {
   if (req.isAuthenticated()) {
-    res.status(200).json({ message: "Authenticated" });
+    res.status(200).json({
+      authenticated: true,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+      },
+    });
   } else {
-    res.status(401).json({ message: "Not authenticated" });
+    res.status(401).json({
+      authenticated: false,
+      message: "Not authenticated",
+    });
   }
 });
-
 app.get("/api/secrets", async (req, res) => {
   console.log(`Received ${req.method} request at ${req.url}`);
   console.log("Is Authenticated:", req.isAuthenticated());
@@ -141,47 +149,24 @@ app.get(
   }
 );
 
-app.post("/api/login", async (req, res, next) => {
-  try {
-    passport.authenticate("local", (err, user, info) => {
+app.post("/api/login", (req, res, next) => {
+  passport.authenticate("local", (err, user, info) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: "Server error" });
+    }
+    if (!user) {
+      return res.status(401).json({ success: false, message: info.message });
+    }
+    req.logIn(user, (err) => {
       if (err) {
-        return res.status(500).json({
-          success: false,
-          message: "Internal server error",
-        });
+        return res.status(500).json({ success: false, message: "Login error" });
       }
-
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: info.message || "Invalid credentials",
-        });
-      }
-
-      req.logIn(user, (err) => {
-        if (err) {
-          return res.status(500).json({
-            success: false,
-            message: "Failed to establish session",
-          });
-        }
-
-        return res.status(200).json({
-          success: true,
-          user: {
-            id: user.id,
-            email: user.email,
-          },
-        });
+      return res.status(200).json({
+        success: true,
+        user: { id: user.id, email: user.email },
       });
-    })(req, res, next);
-  } catch (error) {
-    console.error("Login error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error during login",
     });
-  }
+  })(req, res, next);
 });
 
 app.post("/api/register", async (req, res) => {

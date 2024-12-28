@@ -10,9 +10,10 @@ import {
   Button,
 } from "@mui/material";
 import { Edit, Delete, Save, Close, Add } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
 import EmptyState from "./EmptyState";
-import { secrets } from "./api";
+import { secrets, auth } from "../services/api";
 
 const ClippedCard = styled(Card)(({ theme }) => ({
   position: "relative",
@@ -77,29 +78,70 @@ const AddCard = styled(Card)(({ theme }) => ({
 }));
 
 const SecretPage = () => {
+  const navigate = useNavigate();
   const [error, setError] = useState("");
   const [items, setItems] = useState([]);
   const [newSecret, setNewSecret] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Authentication check with cleanup
   useEffect(() => {
+    let mounted = true;
+
+    const checkAuth = async () => {
+      try {
+        if (mounted) {
+          await auth.checkAuth();
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (mounted && !window.location.pathname.includes("/login")) {
+          navigate("/login", { replace: true });
+        }
+      }
+    };
+
+    checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate]);
+
+  // Fetch secrets with cleanup
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchSecrets = async () => {
+      try {
+        if (mounted) {
+          const secretsData = await secrets.getAll();
+          setItems(
+            secretsData.map((secret) => ({
+              id: secret.secret_id,
+              title: secret.secret,
+              editing: false,
+            }))
+          );
+          setError("");
+        }
+      } catch (err) {
+        if (mounted) {
+          setError("Error fetching secrets. Please try again.");
+        }
+      }
+    };
+
     fetchSecrets();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const fetchSecrets = async () => {
-    try {
-      const secretsData = await secrets.getAll();
-      setItems(
-        secretsData.map((secret) => ({
-          id: secret.secret_id,
-          title: secret.secret,
-          editing: false,
-        }))
-      );
-      setError("");
-    } catch (err) {
-      setError("Error fetching secrets. Please try again.");
-    }
-  };
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   const handleAddSecret = async () => {
     if (!newSecret.trim()) return;

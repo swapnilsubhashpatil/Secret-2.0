@@ -11,18 +11,14 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
-    setIsLoading(true);
-
+  // In your Login component
+  const handleLogin = async (e) => {
+    e.preventDefault();
     try {
-      const result = await auth.login(email, password);
-      window.location.href = "/secrets";
+      await auth.login(username, password);
+      navigate("/secrets", { replace: true });
     } catch (error) {
-      const { message } = handleApiError(error);
-      setError(message);
-    } finally {
-      setIsLoading(false);
+      setError(error.response?.data?.message || "Login failed");
     }
   };
 
