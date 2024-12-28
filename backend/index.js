@@ -41,10 +41,12 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: true, // Set to true since you're using HTTPS
       httpOnly: true,
+      sameSite: "none", // Important for cross-origin requests
       maxAge: 1000 * 60 * 60 * 24,
     },
+    proxy: true, // Important when running behind a proxy
   })
 );
 
@@ -54,13 +56,24 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Update your CORS configuration
 app.use(
   cors({
-    origin: [process.env.FRONTEND_URL], // Note: Remove quotes around process.env.FRONTEND_URL
-    methods: ["POST", "GET"],
+    origin: process.env.FRONTEND_URL.split(","), // Allow multiple origins
+    methods: ["POST", "PUT", "GET", "OPTIONS", "HEAD", "DELETE"], // Add all methods you use
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["set-cookie"],
   })
 );
+
+// Add this middleware before your routes
+app.use((req, res, next) => {
+  console.log("Request Origin:", req.get("origin"));
+  console.log("Request Method:", req.method);
+  console.log("Request Headers:", req.headers);
+  next();
+});
 
 app.get("/", (req, res) => {
   res.send("Server is running");
