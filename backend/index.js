@@ -7,7 +7,6 @@ import { Strategy } from "passport-local";
 import GoogleStrategy from "passport-google-oauth2";
 import cors from "cors";
 import fs from "fs";
-
 import session from "express-session";
 import env from "dotenv";
 
@@ -20,17 +19,16 @@ app.use(
   session({
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: false, // Changed to false for better control
+    saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Set to true in production
-      httpOnly: true, // Prevents client-side JS access
-      // sameSite: "strict", // Helps prevent CSRF attacks
-      maxAge: 1000 * 60 * 60 * 24, // Example: 1 day (optional)
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24,
     },
   })
 );
-app.use(express.json()); // Parses JSON payloads
-app.use(express.urlencoded({ extended: true })); // Parses URL-encoded payload
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -87,7 +85,6 @@ app.get("/api/secrets", async (req, res) => {
         [req.user.id]
       );
       console.log("Secrets retrieved successfully:", result.rows);
-      // Respond with JSON instead of rendering EJS
       res.json({ secrets: result.rows });
     } catch (err) {
       console.error("Error retrieving secrets:", err);
@@ -98,14 +95,6 @@ app.get("/api/secrets", async (req, res) => {
     res.status(401).json({ error: "Unauthorized" });
   }
 });
-
-// app.get("/submit", function (req, res) {
-//   if (req.isAuthenticated()) {
-//     res.render("submit.ejs");
-//   } else {
-//     res.redirect("/login");
-//   }
-// });
 
 app.get(
   "/api/auth/google",
@@ -119,24 +108,16 @@ app.get(
   passport.authenticate("google", {
     failureRedirect: process.env.FRONTEND_URL
       ? `${process.env.FRONTEND_URL}/login`
-      : "http://localhost:5175/login", // Use ternary operator
+      : "http://localhost:5175/login",
   }),
   (req, res) => {
     res.redirect(
       process.env.FRONTEND_URL
         ? `${process.env.FRONTEND_URL}/secrets`
         : "http://localhost:5175/secrets"
-    ); // Use ternary operator
+    );
   }
 );
-
-// app.post(
-//   "/api/login",
-//   passport.authenticate("local", { failureRedirect: null }), // Remove redirect
-//   (req, res) => {
-//     res.json({ message: "Login successful" });
-//   }
-// );
 
 app.post("/api/login", async (req, res, next) => {
   try {
@@ -163,13 +144,11 @@ app.post("/api/login", async (req, res, next) => {
           });
         }
 
-        // Send successful response with user data (excluding sensitive info)
         return res.status(200).json({
           success: true,
           user: {
             id: user.id,
             email: user.email,
-            // Add other non-sensitive user data
           },
         });
       });
@@ -224,52 +203,17 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// app.post("/submit", async (req, res) => {
-//   const submittedSecret = req.body.secret;
-//   try {
-//     await db.query("INSERT INTO secrets (user_id, secret) VALUES ($1, $2)", [
-//       req.user.id,
-//       submittedSecret,
-//     ]);
-//     res.redirect("/secrets");
-//   } catch (err) {
-//     console.error("Error saving secret:", err);
-//     res.send("Error saving secret");
-//   }
-// });
-
-// // Route to handle deletion of a secret
-// app.post("/secrets/delete", async (req, res) => {
-//   const secretId = req.body.secretId;
-//   const userId = req.body.user_id;
-
-//   try {
-//     // Delete the secret with the specified ID for the logged-in user
-//     await db.query(
-//       "DELETE FROM secrets WHERE secret_id = $1 AND user_id = $2",
-//       [secretId, userId]
-//     );
-
-//     // Redirect to the secrets page after deletion
-//     res.redirect("/secrets");
-//   } catch (err) {
-//     console.log(err);
-//     res.status(500).send("Error deleting the secret");
-//   }
-// });
 app.post("/api/submit", async (req, res) => {
   const { secret, secretId } = req.body;
 
   try {
     if (secretId) {
-      // Update existing secret
       const result = await db.query(
         "UPDATE secrets SET secret = $1 WHERE secret_id = $2 AND user_id = $3 RETURNING secret_id",
         [secret, secretId, req.user.id]
       );
       res.json({ secret_id: result.rows[0].secret_id });
     } else {
-      // Insert new secret
       const result = await db.query(
         "INSERT INTO secrets (user_id, secret) VALUES ($1, $2) RETURNING secret_id",
         [req.user.id, secret]
@@ -309,28 +253,24 @@ passport.use(
         const user = result.rows[0];
         const storedHashedPassword = user.password;
 
-        // Compare the password using bcrypt
         bcrypt.compare(password, storedHashedPassword, (err, valid) => {
           if (err) {
             console.error("Error comparing passwords:", err);
-            return cb(err); // Return error if there's an issue with password comparison
+            return cb(err);
           }
 
-          // If password is valid, return user
           if (valid) {
             return cb(null, user);
           } else {
-            // Password doesn't match, return error message
             return cb(null, false, { message: "Password does not match" });
           }
         });
       } else {
-        // User not found
         return cb(null, false, { message: "User not found" });
       }
     } catch (err) {
       console.log("Error during authentication:", err);
-      return cb(err); // Return the error if an issue occurs during query
+      return cb(err);
     }
   })
 );
@@ -341,12 +281,11 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "http://localhost:3000/auth/google/secrets", // Changed this
+      callbackURL: process.env.GOOGLE_CALLBACK_URL,
       userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
     },
     async (accessToken, refreshToken, profile, cb) => {
       try {
-        // Make sure we're getting the email from the correct location
         const email = profile.emails[0].value;
 
         const result = await db.query("SELECT * FROM users WHERE email = $1", [
@@ -354,14 +293,12 @@ passport.use(
         ]);
 
         if (result.rows.length === 0) {
-          // Create new user
           const newUser = await db.query(
             "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING *",
             [email, "google"]
           );
           return cb(null, newUser.rows[0]);
         } else {
-          // Existing user
           return cb(null, result.rows[0]);
         }
       } catch (err) {
@@ -380,5 +317,5 @@ passport.deserializeUser((user, cb) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server running on port http://localhost:${port}`);
+  console.log(`Server running`);
 });
