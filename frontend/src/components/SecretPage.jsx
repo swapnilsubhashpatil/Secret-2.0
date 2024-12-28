@@ -13,7 +13,7 @@ import { Edit, Delete, Save, Close, Add } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
 import EmptyState from "./EmptyState";
-import { secrets, auth } from "../services/api";
+import { secrets, auth } from "./api";
 
 const ClippedCard = styled(Card)(({ theme }) => ({
   position: "relative",
