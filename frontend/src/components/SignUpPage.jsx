@@ -1,43 +1,49 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { Alert } from "@mui/material";
+import { auth, handleApiError } from "./api";
 
 const SignUpPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSignUp = async (event) => {
     event.preventDefault();
+    setIsLoading(true);
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      setIsLoading(false);
       return;
     }
 
     try {
-      const response = await axios.post("/api/register", {
-        username: email,
-        password,
-      });
-      console.log("Sign up successful:", response.data);
-      // navigate("/secrets"); // Redirect to login page after successful signup
-      window.location.href = "/secrets"; // Redirect to the secrets page
-    } catch (err) {
-      console.error("Sign up error:", err.response?.data || err);
-      setError(err.response?.data?.message || "An error occurred");
+      await auth.register(email, password);
+      window.location.href = "/secrets";
+    } catch (error) {
+      const { message } = handleApiError(error);
+      setError(message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleGoogleLogin = () => {
-    window.location.assign("/api/auth/google"); // Redirect to Google login endpoint
+    auth.googleAuth();
   };
 
   return (
     <div className="max-h-screen">
+      {error && (
+        <Alert severity="warning" onClose={() => setError("")}>
+          {error}
+        </Alert>
+      )}
       <section className="border-red-500 bg-gray-200 min-h-screen flex items-center justify-center">
         <div className="bg-gray-100 py-2 flex rounded-2xl shadow-lg max-w-3xl">
           <div className="md:w-1/2 px-5">
@@ -88,13 +94,12 @@ const SignUpPage = () => {
                 />
               </div>
 
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-
               <button
                 type="submit"
+                disabled={isLoading}
                 className="w-full block bg-blue-500 hover:bg-blue-400 focus:bg-blue-400 text-white font-semibold rounded-lg px-4 py-3 mt-6"
               >
-                Sign Up
+                {isLoading ? "Creating Account..." : "Sign Up"}
               </button>
             </form>
 
@@ -106,7 +111,7 @@ const SignUpPage = () => {
 
             <button
               onClick={handleGoogleLogin}
-              className="bg-white border py-2 w-full rounded-xl mt-5 flex justify-center items-center text-sm hover:scale-105 duration-300 "
+              className="bg-white border py-2 w-full rounded-xl mt-5 flex justify-center items-center text-sm hover:scale-105 duration-300"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -140,7 +145,7 @@ const SignUpPage = () => {
                   d="M48 48L17 24l-4-3 35-10z"
                 />
               </svg>
-              <span className="ml-4">Sign In with Google</span>
+              <span className="ml-4">Sign in with Google</span>
             </button>
 
             <div className="text-sm flex justify-between items-center mt-3">

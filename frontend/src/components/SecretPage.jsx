@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import {
   Card,
   CardContent,
@@ -13,6 +12,7 @@ import {
 import { Edit, Delete, Save, Close, Add } from "@mui/icons-material";
 import Nav from "./Nav";
 import EmptyState from "./EmptyState";
+import { secrets } from "./api";
 
 const ClippedCard = styled(Card)(({ theme }) => ({
   position: "relative",
@@ -87,16 +87,15 @@ const SecretPage = () => {
 
   const fetchSecrets = async () => {
     try {
-      const response = await axios.get("/api/secrets", {
-        withCredentials: true,
-      });
+      const secretsData = await secrets.getAll();
       setItems(
-        response.data.secrets.map((secret) => ({
+        secretsData.map((secret) => ({
           id: secret.secret_id,
           title: secret.secret,
           editing: false,
         }))
       );
+      setError("");
     } catch (err) {
       setError("Error fetching secrets. Please try again.");
     }
@@ -106,26 +105,17 @@ const SecretPage = () => {
     if (!newSecret.trim()) return;
 
     try {
-      const response = await axios.post(
-        "/api/submit",
-        {
-          secret: newSecret,
-        },
-        {
-          withCredentials: true,
-        }
-      );
-
-      // Assuming backend returns the new secret's ID
+      const response = await secrets.add(newSecret);
       setItems([
         ...items,
         {
-          id: response.data.secret_id,
+          id: response.secret_id,
           title: newSecret,
           editing: false,
         },
       ]);
       setNewSecret("");
+      setError("");
     } catch (err) {
       setError("Error adding secret. Please try again.");
     }
@@ -139,22 +129,13 @@ const SecretPage = () => {
 
   const handleSave = async (id, newTitle) => {
     try {
-      await axios.post(
-        "/submit",
-        {
-          secret: newTitle,
-          secretId: id,
-        },
-        {
-          withCredentials: true,
-        }
-      );
-
+      await secrets.update(id, newTitle);
       setItems(
         items.map((item) =>
           item.id === id ? { ...item, title: newTitle, editing: false } : item
         )
       );
+      setError("");
     } catch (err) {
       setError("Error updating secret. Please try again.");
     }
@@ -168,17 +149,9 @@ const SecretPage = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.post(
-        "/api/secrets/delete",
-        {
-          secretId: id,
-        },
-        {
-          withCredentials: true,
-        }
-      );
-
+      await secrets.delete(id);
       setItems(items.filter((item) => item.id !== id));
+      setError("");
     } catch (err) {
       setError("Error deleting secret. Please try again.");
     }

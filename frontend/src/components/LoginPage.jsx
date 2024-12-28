@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { Alert } from "@mui/material";
+import { auth, handleApiError } from "./api";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -11,44 +11,29 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Handle Google login
-  const handleGoogleLogin = () => {
-    window.location.assign("/api/auth/google"); // Redirect to Google login endpoint
-  };
-
-  // Handle form login
   const handleLogin = async (event) => {
     event.preventDefault();
     setIsLoading(true);
-    setError(""); // Reset error state
 
     try {
-      const response = await axios.post("/api/login", {
-        username: email,
-        password,
-      });
-
-      console.log("Login successful:", response.data);
-      // navigate("/secrets");
-      window.location.href = "/secrets"; // Redirect to the secrets page
-    } catch (err) {
-      console.error("Login error:", err.response?.data || err);
-      setError(err.response?.data?.message || "Error logging in.");
+      const result = await auth.login(email, password);
+      window.location.href = "/secrets";
+    } catch (error) {
+      const { message } = handleApiError(error);
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleGoogleLogin = () => {
+    auth.googleAuth();
+  };
+
   return (
     <div>
       {error && (
-        <Alert
-          severity="warning"
-          onClose={() => {
-            setError("");
-          }}
-        >
-          {" "}
+        <Alert severity="warning" onClose={() => setError("")}>
           {error}
         </Alert>
       )}
@@ -97,16 +82,12 @@ const LoginPage = () => {
                 </a>
               </div>
 
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-
               <button
                 type="submit"
-                className={`w-full block bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg px-4 py-3 mt-6 ${
-                  isLoading ? "opacity-50 cursor-not-allowed" : ""
-                }`}
                 disabled={isLoading}
+                className="w-full block bg-blue-500 hover:bg-blue-400 focus:bg-blue-400 text-white font-semibold rounded-lg px-4 py-3 mt-6"
               >
-                {isLoading ? "Logging In..." : "Log In"}
+                {isLoading ? "Logging in..." : "Log In"}
               </button>
             </form>
 
@@ -118,7 +99,7 @@ const LoginPage = () => {
 
             <button
               onClick={handleGoogleLogin}
-              className="bg-white border py-2 w-full rounded-xl mt-5 flex justify-center items-center text-sm hover:scale-105 duration-300 "
+              className="bg-white border py-2 w-full rounded-xl mt-5 flex justify-center items-center text-sm hover:scale-105 duration-300"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

@@ -7,25 +7,16 @@ import SecretPage from "./SecretPage";
 import { Navigate } from "react-router-dom";
 import axios from "axios";
 import LoadingScreen from "./LoadingScreen";
+import { auth } from "./api";
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(null); // null until we check
+  const [isAuthenticated, setIsAuthenticated] = useState(null);
 
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        const response = await axios.get("/api/check-auth", {
-          withCredentials: true,
-        });
-        if (response.status === 200) {
-          setIsAuthenticated(true); // User is authenticated
-        }
-      } catch (error) {
-        console.error("Authentication check failed:", error);
-        setIsAuthenticated(false); // User is not authenticated
-      }
+      const isAuth = await auth.checkAuth();
+      setIsAuthenticated(isAuth);
     };
-
     checkAuth();
   }, []);
 
