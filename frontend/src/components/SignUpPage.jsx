@@ -24,7 +24,8 @@ const SignUpPage = () => {
         password,
       });
       console.log("Sign up successful:", response.data);
-      navigate("/secrets"); // Redirect to login page after successful signup
+      // navigate("/secrets"); // Redirect to login page after successful signup
+      window.location.href = "/secrets"; // Redirect to the secrets page
     } catch (err) {
       console.error("Sign up error:", err.response?.data || err);
       setError(err.response?.data?.message || "An error occurred");
