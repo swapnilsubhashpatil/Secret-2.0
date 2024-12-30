@@ -3,42 +3,19 @@ import axios from "axios";
 const api = axios.create({
   baseURL: "https://secret-2-0.onrender.com",
   timeout: 30000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Add token to requests if it exists
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Handle response interceptor
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      if (!window.location.pathname.includes("/login")) {
-        window.location.href = "/login";
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Auth related API calls
 const auth = {
-  login: async (username, password) => {
+  login: async (email, password) => {
     try {
-      const response = await api.post("/api/login", { username, password });
-      if (response.data.token) {
-        localStorage.setItem("token", response.data.token);
-      }
+      const response = await api.post("/api/login", {
+        username: email,
+        password,
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -48,9 +25,6 @@ const auth = {
   register: async (username, password) => {
     try {
       const response = await api.post("/api/register", { username, password });
-      if (response.data.token) {
-        localStorage.setItem("token", response.data.token);
-      }
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -58,25 +32,26 @@ const auth = {
   },
 
   logout: async () => {
-    localStorage.removeItem("token");
-    window.location.href = "/login";
+    try {
+      await api.get("/api/logout");
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout error:", error);
+      window.location.href = "/login";
+    }
   },
 
   checkAuth: async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return false;
-
     try {
       const response = await api.get("/api/check-auth");
-      return response.status === 200;
+      return response.data.authenticated;
     } catch (error) {
-      localStorage.removeItem("token");
       return false;
     }
   },
 
   googleAuth: () => {
-    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+    window.location.href = `${api.defaults.baseURL}/api/auth/google`;
   },
 };
 
