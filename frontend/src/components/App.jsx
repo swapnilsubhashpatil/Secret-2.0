@@ -1,34 +1,53 @@
 import React, { useState, useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import Home from "./Home";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import LoginPage from "./LoginPage";
 import SignUpPage from "./SignUpPage";
 import SecretPage from "./SecretPage";
-import { Navigate } from "react-router-dom";
-import axios from "axios";
 import LoadingScreen from "./LoadingScreen";
 import { auth } from "./api";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const isAuth = await auth.checkAuth();
-      setIsAuthenticated(isAuth);
+      try {
+        const isAuth = await auth.checkAuth();
+        setIsAuthenticated(isAuth);
+      } catch (error) {
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
     };
     checkAuth();
   }, []);
 
-  if (isAuthenticated === null) {
-    return <LoadingScreen />; // Show a loading indicator while checking
+  if (isLoading) {
+    return <LoadingScreen />;
   }
+
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<SignUpPage />} />
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/secrets" /> : <LoginPage />}
+        />
+        <Route
+          path="/register"
+          element={
+            isAuthenticated ? <Navigate to="/secrets" /> : <SignUpPage />
+          }
+        />
         <Route
           path="/secrets"
           element={isAuthenticated ? <SecretPage /> : <Navigate to="/login" />}
