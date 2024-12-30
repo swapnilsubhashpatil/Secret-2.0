@@ -2,20 +2,17 @@ import express from "express";
 import bodyParser from "body-parser";
 import pg from "pg";
 import bcrypt from "bcrypt";
-import passport from "passport";
-import { Strategy } from "passport-local";
-import GoogleStrategy from "passport-google-oauth2";
+import jwt from "jsonwebtoken";
 import cors from "cors";
 import fs from "fs";
-import session from "express-session";
 import env from "dotenv";
-import pgSession from "connect-pg-simple";
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 const saltRounds = 10;
 env.config();
 
+// Database configuration
 const db = new pg.Pool({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
@@ -27,212 +24,171 @@ const db = new pg.Pool({
   },
 });
 
-// Create pgSession store
-const PgStore = pgSession(session);
-
-// Session middleware setup (only once)
-app.use(
-  session({
-    store: new PgStore({
-      pool: db,
-      tableName: "session",
-    }),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: true,
-      httpOnly: true,
-      sameSite: "none",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-    proxy: true,
-  })
-);
-
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Update your CORS configuration
 app.use(
   cors({
-    origin: true, // Allow all origins
-    // or use origin: '*' if you don't need credentials
+    origin: process.env.FRONTEND_URL || "http://localhost:5175",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-// Add this middleware before your routes
-app.use((req, res, next) => {
-  console.log("Request Origin:", req.get("origin"));
-  console.log("Request Method:", req.method);
-  console.log("Request Headers:", req.headers);
-  next();
-});
 
+// JWT Authentication Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "No token provided" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: "Invalid token" });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Public Routes
 app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-app.get("/api/logout", (req, res) => {
-  req.logout(function (err) {
-    if (err) {
-      return next(err);
-    }
-    res.redirect("/");
-  });
-});
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
 
-app.get("/api/check-auth", (req, res) => {
-  if (req.isAuthenticated()) {
-    res.status(200).json({
-      authenticated: true,
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-      },
-    });
-  } else {
-    res.status(401).json({
-      authenticated: false,
-      message: "Not authenticated",
-    });
-  }
-});
-app.get("/api/secrets", async (req, res) => {
-  console.log(`Received ${req.method} request at ${req.url}`);
-  console.log("Is Authenticated:", req.isAuthenticated());
+  try {
+    const result = await db.query("SELECT * FROM users WHERE email = $1", [
+      username,
+    ]);
 
-  if (req.isAuthenticated()) {
-    try {
-      const result = await db.query(
-        "SELECT secret_id, secret FROM secrets WHERE user_id = $1 ORDER BY created_at DESC",
-        [req.user.id]
-      );
-      console.log("Secrets retrieved successfully:", result.rows);
-      res.json({ secrets: result.rows });
-    } catch (err) {
-      console.error("Error retrieving secrets:", err);
-      res.status(500).json({ error: "Error retrieving secrets" });
-    }
-  } else {
-    console.log("User not authenticated. Redirecting to /login.");
-    res.status(401).json({ error: "Unauthorized" });
-  }
-});
+    if (result.rows.length > 0) {
+      const user = result.rows[0];
+      const match = await bcrypt.compare(password, user.password);
 
-app.get(
-  "/api/auth/google",
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-  })
-);
+      if (match) {
+        const token = jwt.sign(
+          { id: user.id, email: user.email },
+          process.env.JWT_SECRET,
+          { expiresIn: "24h" }
+        );
 
-app.get(
-  "/auth/google/secrets",
-  passport.authenticate("google", {
-    failureRedirect: process.env.FRONTEND_URL
-      ? `${process.env.FRONTEND_URL}/login`
-      : "http://localhost:5175/login",
-  }),
-  (req, res) => {
-    res.redirect(
-      process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/secrets`
-        : "http://localhost:5175/secrets"
-    );
-  }
-);
-
-app.post("/api/login", (req, res, next) => {
-  passport.authenticate("local", (err, user, info) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Server error" });
-    }
-    if (!user) {
-      return res.status(401).json({ success: false, message: info.message });
-    }
-    req.logIn(user, (err) => {
-      if (err) {
-        return res.status(500).json({ success: false, message: "Login error" });
+        return res.json({
+          success: true,
+          token,
+          user: { id: user.id, email: user.email },
+        });
       }
-      return res.status(200).json({
-        success: true,
-        user: { id: user.id, email: user.email },
-      });
+    }
+
+    res.status(401).json({
+      success: false,
+      message: "Invalid credentials",
     });
-  })(req, res, next);
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error during login",
+    });
+  }
 });
 
 app.post("/api/register", async (req, res) => {
-  const email = req.body.username;
-  const password = req.body.password;
+  const { username, password } = req.body;
 
   try {
     const checkResult = await db.query("SELECT * FROM users WHERE email = $1", [
-      email,
+      username,
     ]);
 
     if (checkResult.rows.length > 0) {
-      res.redirect(
-        process.env.FRONTEND_URL
-          ? `${process.env.FRONTEND_URL}/secrets`
-          : "http://localhost:5175/secrets"
-      );
-    } else {
-      bcrypt.hash(password, saltRounds, async (err, hash) => {
-        if (err) {
-          console.error("Error hashing password:", err);
-        } else {
-          const result = await db.query(
-            "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING *",
-            [email, hash]
-          );
-          const user = result.rows[0];
-          req.login(user, (err) => {
-            console.log("success");
-            res.redirect(
-              process.env.FRONTEND_URL
-                ? `${process.env.FRONTEND_URL}/secrets`
-                : "http://localhost:5175/secrets"
-            );
-          });
-        }
+      return res.status(409).json({
+        success: false,
+        message: "User already exists",
       });
     }
+
+    const hash = await bcrypt.hash(password, saltRounds);
+    const result = await db.query(
+      "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
+      [username, hash]
+    );
+
+    const token = jwt.sign(
+      { id: result.rows[0].id, email: result.rows[0].email },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: result.rows[0],
+    });
   } catch (err) {
-    console.log(err);
+    console.error("Registration error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error during registration",
+    });
   }
 });
 
-app.post("/api/submit", async (req, res) => {
+// Protected Routes
+app.get("/api/check-auth", authenticateToken, (req, res) => {
+  res.json({
+    authenticated: true,
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+    },
+  });
+});
+
+app.get("/api/secrets", authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      "SELECT secret_id, secret FROM secrets WHERE user_id = $1 ORDER BY created_at DESC",
+      [req.user.id]
+    );
+    res.json({ secrets: result.rows });
+  } catch (err) {
+    console.error("Error fetching secrets:", err);
+    res.status(500).json({ error: "Error retrieving secrets" });
+  }
+});
+
+app.post("/api/submit", authenticateToken, async (req, res) => {
   const { secret, secretId } = req.body;
 
   try {
+    let result;
     if (secretId) {
-      const result = await db.query(
+      // Update existing secret
+      result = await db.query(
         "UPDATE secrets SET secret = $1 WHERE secret_id = $2 AND user_id = $3 RETURNING secret_id",
         [secret, secretId, req.user.id]
       );
-      res.json({ secret_id: result.rows[0].secret_id });
     } else {
-      const result = await db.query(
+      // Create new secret
+      result = await db.query(
         "INSERT INTO secrets (user_id, secret) VALUES ($1, $2) RETURNING secret_id",
         [req.user.id, secret]
       );
-      res.json({ secret_id: result.rows[0].secret_id });
     }
+    res.json({ secret_id: result.rows[0].secret_id });
   } catch (err) {
     console.error("Error saving secret:", err);
     res.status(500).json({ error: "Error saving secret" });
   }
 });
 
-app.post("/api/secrets/delete", async (req, res) => {
+app.post("/api/secrets/delete", authenticateToken, async (req, res) => {
   const { secretId } = req.body;
 
   try {
@@ -242,86 +198,77 @@ app.post("/api/secrets/delete", async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    console.log(err);
+    console.error("Error deleting secret:", err);
     res.status(500).json({ error: "Error deleting the secret" });
   }
 });
 
-passport.use(
-  "local",
-  new Strategy(async function verify(username, password, cb) {
-    try {
-      const result = await db.query("SELECT * FROM users WHERE email = $1", [
-        username,
-      ]);
+// Google OAuth Routes
+app.get("/api/auth/google", (req, res) => {
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_CALLBACK_URL}&response_type=code&scope=email%20profile`;
 
-      if (result.rows.length > 0) {
-        const user = result.rows[0];
-        const storedHashedPassword = user.password;
-
-        bcrypt.compare(password, storedHashedPassword, (err, valid) => {
-          if (err) {
-            console.error("Error comparing passwords:", err);
-            return cb(err);
-          }
-
-          if (valid) {
-            return cb(null, user);
-          } else {
-            return cb(null, false, { message: "Password does not match" });
-          }
-        });
-      } else {
-        return cb(null, false, { message: "User not found" });
-      }
-    } catch (err) {
-      console.log("Error during authentication:", err);
-      return cb(err);
-    }
-  })
-);
-
-passport.use(
-  "google",
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL,
-      userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
-    },
-    async (accessToken, refreshToken, profile, cb) => {
-      try {
-        const email = profile.emails[0].value;
-
-        const result = await db.query("SELECT * FROM users WHERE email = $1", [
-          email,
-        ]);
-
-        if (result.rows.length === 0) {
-          const newUser = await db.query(
-            "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING *",
-            [email, "google"]
-          );
-          return cb(null, newUser.rows[0]);
-        } else {
-          return cb(null, result.rows[0]);
-        }
-      } catch (err) {
-        return cb(err);
-      }
-    }
-  )
-);
-
-passport.serializeUser((user, cb) => {
-  cb(null, user);
+  res.redirect(googleAuthUrl);
 });
 
-passport.deserializeUser((user, cb) => {
-  cb(null, user);
+app.get("/auth/google/secrets", async (req, res) => {
+  const { code } = req.query;
+
+  try {
+    // Exchange code for tokens (you'll need to implement this)
+    // const tokens = await getGoogleTokens(code);
+    // const profile = await getGoogleProfile(tokens.access_token);
+
+    const email = profile.email;
+
+    let result = await db.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+    let user;
+
+    if (result.rows.length === 0) {
+      const newUser = await db.query(
+        "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
+        [email, "google"]
+      );
+      user = newUser.rows[0];
+    } else {
+      user = result.rows[0];
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    // Redirect to frontend with token
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+  } catch (err) {
+    console.error("Google auth error:", err);
+    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+  }
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+  });
+});
+
+// Start server
 app.listen(port, () => {
-  console.log(`Server running`);
+  console.log(`Server running on port ${port}`);
+});
+
+// Process handling
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
 });
