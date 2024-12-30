@@ -5,15 +5,16 @@ import {
   Typography,
   IconButton,
   Box,
-  styled,
   TextField,
   Button,
+  CircularProgress,
 } from "@mui/material";
+import { styled } from "@mui/material/styles";
 import { Edit, Delete, Save, Close, Add } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import { secrets, auth, handleApiError } from "./api";
 import Nav from "./Nav";
 import EmptyState from "./EmptyState";
-import { secrets, auth } from "./api";
 
 const ClippedCard = styled(Card)(({ theme }) => ({
   position: "relative",
@@ -84,36 +85,17 @@ const SecretPage = () => {
   const [newSecret, setNewSecret] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Authentication check with cleanup
   useEffect(() => {
     let mounted = true;
 
-    const checkAuth = async () => {
+    const init = async () => {
       try {
-        if (mounted) {
-          await auth.checkAuth();
-          setIsLoading(false);
-        }
-      } catch (error) {
-        if (mounted && !window.location.pathname.includes("/login")) {
+        const isAuthenticated = await auth.checkAuth();
+        if (!isAuthenticated && mounted) {
           navigate("/login", { replace: true });
+          return;
         }
-      }
-    };
 
-    checkAuth();
-
-    return () => {
-      mounted = false;
-    };
-  }, [navigate]);
-
-  // Fetch secrets with cleanup
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchSecrets = async () => {
-      try {
         if (mounted) {
           const secretsData = await secrets.getAll();
           setItems(
@@ -123,25 +105,23 @@ const SecretPage = () => {
               editing: false,
             }))
           );
-          setError("");
+          setIsLoading(false);
         }
       } catch (err) {
         if (mounted) {
-          setError("Error fetching secrets. Please try again.");
+          const error = handleApiError(err);
+          setError(error.message);
+          setIsLoading(false);
         }
       }
     };
 
-    fetchSecrets();
+    init();
 
     return () => {
       mounted = false;
     };
-  }, []);
-
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+  }, [navigate]);
 
   const handleAddSecret = async () => {
     if (!newSecret.trim()) return;
@@ -159,7 +139,8 @@ const SecretPage = () => {
       setNewSecret("");
       setError("");
     } catch (err) {
-      setError("Error adding secret. Please try again.");
+      const error = handleApiError(err);
+      setError(error.message);
     }
   };
 
@@ -179,7 +160,8 @@ const SecretPage = () => {
       );
       setError("");
     } catch (err) {
-      setError("Error updating secret. Please try again.");
+      const error = handleApiError(err);
+      setError(error.message);
     }
   };
 
@@ -195,9 +177,23 @@ const SecretPage = () => {
       setItems(items.filter((item) => item.id !== id));
       setError("");
     } catch (err) {
-      setError("Error deleting secret. Please try again.");
+      const error = handleApiError(err);
+      setError(error.message);
     }
   };
+
+  if (isLoading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <div>
@@ -277,12 +273,12 @@ const SecretPage = () => {
                   {item.editing ? (
                     <>
                       <IconButton
-                        onClick={() =>
-                          handleSave(
-                            item.id,
-                            document.querySelector("input").value
-                          )
-                        }
+                        onClick={(e) => {
+                          const input = e.target
+                            .closest(".MuiCardContent-root")
+                            .querySelector("input");
+                          handleSave(item.id, input.value);
+                        }}
                         sx={{
                           color: "#90caf9",
                           "&:hover": { bgcolor: "rgba(144, 202, 249, 0.08)" },
